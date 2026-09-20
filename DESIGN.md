@@ -12,6 +12,10 @@
 **Interaction Tier**: L2 — плавен dashboard
 **Dependencies**: CSS + IntersectionObserver; без GSAP/3D в първата версия
 
+### Login Gate
+
+Входът е част от Mission Control, не отделен generic auth екран: лявата страна обяснява личните мисии, отборния прогрес и историята на точките, а дясната съдържа компактна Google OAuth card. Използва се същият светъл фон, виолетов action цвят и мрежовият background от платформата. На мобилни устройства layout-ът става една колона.
+
 ## 2. Color Palette & Roles
 
 ```css
