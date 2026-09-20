@@ -48,6 +48,7 @@
   </div>
   <nav class="bottom-nav"><button class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Начало</button><button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Мисии</button><button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Отбор</button><a href="https://sofiasummit.bg/events/hr-rushforpractice/ranking/" target="_blank" rel="noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h8M12 17V3M5 7h14M7 17h10"/><path d="M5 7c0 4 2 6 7 6s7-2 7-6"/></svg>Класация</a></nav>
   <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-card"><button class="close" id="closeModal" aria-label="Затвори">×</button><p class="eyebrow">CANDIDATE HUNT · 50 точки</p><h2 id="modalTitle">Намери 5 кандидата по позицията в Pleggi</h2><p class="muted">Намери петима подходящи кандидати и изпрати доказателство за изпълнението.</p><div class="field"><label for="evidence">Линк към доказателство</label><input id="evidence" placeholder="https://..." /></div><div class="field"><label for="note">Бележка към проверяващия</label><textarea id="note" rows="4" placeholder="Как изпълни мисията?"></textarea></div><div class="modal-actions"><button class="secondary" id="cancelModal">Отказ</button><button class="primary" id="submitMission">Изпрати за проверка</button></div></div></div><div class="toast" id="toast">Мисията е изпратена за проверка.</div>
+  <script src="config.js"></script>
   <script>
     const missions=[
       {title:'Pleggi профил',cat:'quick',label:'ПРОФИЛ',points:1,deadline:'3 дни',desc:'Създай и попълни профила си в Pleggi.',status:'Отворена'},
@@ -68,7 +69,7 @@
     const modal=document.querySelector('#modal');function openModal(title){document.querySelector('#modalTitle').textContent=title;modal.classList.add('open');document.querySelector('#evidence').focus()}function closeModal(){modal.classList.remove('open')}document.querySelector('[data-open="mission"]').onclick=()=>openModal('Намери 5 кандидата по позицията в Pleggi');document.querySelector('#closeModal').onclick=closeModal;document.querySelector('#cancelModal').onclick=closeModal;modal.onclick=e=>{if(e.target===modal)closeModal()};document.querySelector('#submitMission').onclick=()=>{closeModal();const t=document.querySelector('#toast');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)};document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
     document.querySelector('#notificationBtn').onclick=()=>document.querySelector('.panel:last-child').scrollIntoView({behavior:'smooth'});
 
-    const sessionKey = 'hrRushSession';
+    const sessionKey = 'hr_rush_id_token';
     const profileName = document.querySelector('.profile strong');
     const profileAvatar = document.querySelector('.profile .avatar');
     const profile = document.querySelector('.profile');
@@ -79,36 +80,59 @@
     logoutButton.textContent = 'Изход';
     profile.appendChild(logoutButton);
 
+    const cfg = window.HR_RUSH_CONFIG || {};
+    const loginForm = document.querySelector('#login-form');
+    const loginCard = document.querySelector('.login-card');
+    const googleButton = document.createElement('button');
+    googleButton.className = 'primary';
+    googleButton.type = 'button';
+    googleButton.textContent = 'Продължи с Google';
+    loginForm.replaceWith(googleButton);
+
+    const decodeToken = value => {
+      try {
+        const payload = value.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        return JSON.parse(atob(payload));
+      } catch (_) { return null; }
+    };
+    const loginUrl = () => `${cfg.cognitoDomain}/oauth2/authorize?client_id=${encodeURIComponent(cfg.clientId)}&response_type=token&scope=openid+email+profile&redirect_uri=${encodeURIComponent(cfg.redirectUri || window.location.href.split('#')[0])}&identity_provider=Google`;
+    const readHashToken = () => {
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const token = params.get('id_token');
+      if (token) {
+        localStorage.setItem(sessionKey, token);
+        history.replaceState(null, '', window.location.pathname);
+        return token;
+      }
+      return localStorage.getItem(sessionKey);
+    };
+    const token = readHashToken();
+    const claims = token ? decodeToken(token) : null;
+
     function applySession(session) {
       document.body.classList.add('is-authenticated');
-      const name = session.name || session.email.split('@')[0].replace(/[._-]+/g, ' ');
+      const name = session.name || session.email?.split('@')[0].replace(/[._-]+/g, ' ') || 'Участник';
       profileName.textContent = name.replace(/\b\w/g, letter => letter.toUpperCase());
       profileAvatar.textContent = profileName.textContent.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase();
     }
 
-    const savedSession = JSON.parse(localStorage.getItem(sessionKey) || 'null');
-    if (savedSession) applySession(savedSession);
-
-    document.querySelector('#login-form').addEventListener('submit', event => {
-      event.preventDefault();
-      const email = document.querySelector('#login-email').value.trim();
-      const password = document.querySelector('#login-password').value;
-      const error = document.querySelector('#login-error');
-      if (!email || !email.includes('@') || password.length < 6) {
-        error.style.display = 'block';
+    if (claims) applySession({ email: claims.email, name: claims.name || claims['cognito:username'] });
+    googleButton.addEventListener('click', () => {
+      if (!cfg.cognitoDomain || cfg.cognitoDomain.startsWith('REPLACE') || !cfg.clientId || cfg.clientId.startsWith('REPLACE')) {
+        const note = document.createElement('p');
+        note.className = 'login-error';
+        note.style.display = 'block';
+        note.textContent = 'Google входът ще бъде активен след добавяне на Cognito настройките в AWS.';
+        loginCard.appendChild(note);
         return;
       }
-      error.style.display = 'none';
-      const session = { email, name: email.split('@')[0].replace(/[._-]+/g, ' ') };
-      localStorage.setItem(sessionKey, JSON.stringify(session));
-      applySession(session);
+      window.location.href = loginUrl();
     });
 
     logoutButton.addEventListener('click', () => {
       localStorage.removeItem(sessionKey);
       document.body.classList.remove('is-authenticated');
-      document.querySelector('#login-password').value = '';
-      document.querySelector('#login-email').focus();
+      window.location.hash = '';
     });
     (()=>{const canvas=document.querySelector('#network-background'),ctx=canvas.getContext('2d'),reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;let width,height,points=[],mouse={x:-9999,y:-9999};function resize(){width=innerWidth;height=innerHeight;const ratio=devicePixelRatio||1;canvas.width=width*ratio;canvas.height=height*ratio;canvas.style.width=width+'px';canvas.style.height=height+'px';ctx.setTransform(ratio,0,0,ratio,0,0);points=[];const cols=Math.max(8,Math.floor(width/105)),rows=Math.max(6,Math.floor(height/105));for(let x=0;x<cols;x++)for(let y=0;y<rows;y++){const px=(x+.5+Math.random()*.3)*width/cols,py=(y+.5+Math.random()*.3)*height/rows;points.push({x:px,y:py,ox:px,oy:py,phase:Math.random()*6.28})}}function draw(time){ctx.clearRect(0,0,width,height);points.forEach((p,i)=>{if(!reduced){p.x=p.ox+Math.sin(time*.00035+p.phase)*7;p.y=p.oy+Math.cos(time*.0003+p.phase)*7}for(let j=i+1;j<points.length;j++){const q=points[j],dx=p.x-q.x,dy=p.y-q.y,d=Math.hypot(dx,dy),near=Math.hypot(p.x-mouse.x,p.y-mouse.y);if(d<150){const alpha=Math.max(.04,.18*(1-d/150))+(near<220?.16*(1-near/220):0);ctx.strokeStyle='rgba(98,87,232,'+alpha+')';ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke()}}if(Math.hypot(p.x-mouse.x,p.y-mouse.y)<220){ctx.fillStyle='rgba(255,138,61,.9)';ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,6.28);ctx.fill()}});if(!reduced)requestAnimationFrame(draw)}resize();addEventListener('resize',resize,{passive:true});addEventListener('pointermove',e=>{mouse.x=e.clientX;mouse.y=e.clientY},{passive:true});draw(0)})();
   </script>
